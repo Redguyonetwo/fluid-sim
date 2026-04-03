@@ -42,7 +42,7 @@ const y = 500
 const ir = 100
 const irSq = ir * ir
 
-const gravity = -50;
+const gravity = -200;
 
 let targetDensity = 0.002
 
@@ -50,7 +50,7 @@ let minDensity = targetDensity * 0.1
 
 let maxMult = 1 / minDensity
 
-let pressureMult = 1e5
+let pressureMult = 1e6
 
 for (let i = 0; i < 1000; i++) {
     let x = Math.random() * innerWidth * 0.95 + innerWidth * 0.025
