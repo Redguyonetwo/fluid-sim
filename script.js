@@ -97,12 +97,6 @@ function arrow(x1, y1, x2, y2) {
 
 let lastTime = performance.now()
 
-let started = false;
-
-addEventListener('keydown', (e) => {
-    if (e.key == 's') started = true
-})
-
 console.log(balls.length, properties.length)
 
 function smoothInfluence(distance) {
@@ -399,11 +393,11 @@ for (let x = 0; x <= innerWidth; x += cellSize) {
     }
 }
 
-console.log(performance.now() - start, 'ms')
+console.log('initialised in', (performance.now() - start).toFixed(2), 'ms')
 
-console.log(balls[0])
-console.log(getForce(0, ir))
-console.log(getPressure(densities[0]))
+// console.log(balls[0])
+// console.log(getForce(0, ir))
+// console.log(getPressure(densities[0]))
 
 requestAnimationFrame(update)
 
@@ -428,7 +422,7 @@ for (let i in balls) {
 function update(timestamp) {
     requestAnimationFrame(update)
     
-    if (!started) return;
+    //if (!started) return;
 
     updateSpatial()
 
