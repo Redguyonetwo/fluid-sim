@@ -39,12 +39,17 @@ const cellOffsets = [
 
 const x = 400
 const y = 500
-const ir = 100
+const ir = 50
 const irSq = ir * ir
+
+const maxCellX = Math.floor(innerWidth / ir)
+const maxCellY = Math.floor(innerHeight / ir)
 
 const gravity = -200;
 
-let targetDensity = 0.002
+const numParticles = 2000
+
+let targetDensity = 0.004
 
 let minDensity = targetDensity * 0.1
 
@@ -52,7 +57,30 @@ let maxMult = 1 / minDensity
 
 let pressureMult = 1e6
 
-for (let i = 0; i < 1000; i++) {
+let mouse = {x: 0, y: 0, down: [false, false, false]}
+
+const mouseRadius = 10
+
+const mouseStrength = 5e2
+
+const mrSq = mouseRadius * mouseRadius
+
+addEventListener('mousemove', (e) => {
+    mouse.x = e.x
+    mouse.y = innerHeight - e.y
+})
+
+addEventListener('mousedown', (e) => {
+    mouse.down[e.button] = true
+})
+
+addEventListener('mouseup', (e) => {
+    mouse.down[e.button] = false
+})
+
+addEventListener('contextmenu', e => e.preventDefault())
+
+for (let i = 0; i < numParticles; i++) {
     let x = Math.random() * innerWidth * 0.95 + innerWidth * 0.025
     let y = Math.random() * innerHeight * 0.95 + innerHeight * 0.025
     balls[i] = {
@@ -80,7 +108,7 @@ function text(text, x, y) {
     ctx.save()
     ctx.scale(1, -1)
     ctx.translate(0, -innerHeight)
-    ctx.fillStyle = 'black'
+    ctx.fillStyle = 'white'
     ctx.fillText(text, x, y)
     ctx.restore()
 }
@@ -240,7 +268,7 @@ function toCell(x, y) {
 }
 
 function cellHash(x, y) {
-    return (Math.abs(x * 73856093) ^ Math.abs(y * 19349663)) % 10000;
+    return (Math.abs(x * 73856093) ^ Math.abs(y * 19349663)) % 40000;
 }
 
 function updateSpatial() {
@@ -281,7 +309,7 @@ function getForceSpatial(index) {
     for (let {x: offsetX, y: offsetY} of cellOffsets) {
         let newX = cellX + offsetX
         let newY = cellY + offsetY
-        if (newX < 0 || newY < 0) continue;
+        if (newX < 0 || newY < 0 || newX > maxCellX || newY > maxCellY) continue;
         let key = cellHash(newX, newY)
 
         //if (key < 0 || isNaN(key)) continue;
@@ -318,7 +346,10 @@ function getForceSpatial(index) {
             }
 
             let slope = smoothInfluenceDerivative(distance)
+
             let density = densities[cell.index]
+            if (density < minDensity) density = minDensity
+
             let pressure = getSharedPressure(density, d)
 
             let scalar = pressure * slope * mass / density
@@ -339,7 +370,7 @@ function getDensitySpatial(x, y) {
     for (let {x: offsetX, y: offsetY} of cellOffsets) {
         let newX = cellX + offsetX
         let newY = cellY + offsetY
-        if (newX < 0 || newY < 0) continue;
+        if (newX < 0 || newY < 0 || newX > maxCellX || newY > maxCellY) continue;
         let key = cellHash(newX, newY)
 
         //if (key < 0 || isNaN(key)) continue;
@@ -373,6 +404,40 @@ function getDensitySpatial(x, y) {
     }
 
     return density
+}
+
+function interactionForce(index) {
+    let f = {x: 0, y: 0}
+    
+    let multi = 0;
+
+    if (mouse.down[0]) multi = 1
+    else if (mouse.down[2]) multi = -1
+    else return f;
+
+    let p = balls[index]
+
+    let dx = mouse.x - p.x
+    let dy = mouse.y - p.y
+    let distSq = dx * dx + dy * dy
+
+    if (distSq < mrSq) return f;
+
+    let distance = Math.sqrt(distSq)
+
+    if (distance < mouseRadius * 0.5) return f;
+
+    dx /= distance
+    dy /= distance
+
+    let t = 1 //- distance / mouseRadius;
+
+    f.x += (dx * mouseStrength - p.vx * t) * multi
+    f.y += (dy * mouseStrength - p.vy * t) * multi
+
+    //if (index == 0) console.log(f)
+
+    return f;
 }
 
 let cellSize = 20
@@ -434,27 +499,30 @@ function update(timestamp) {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-    for (let x = 0; x <= innerWidth; x += cellSize) {
-        for (let y = 0; y <= innerHeight; y += cellSize) {
-            const d = getDensitySpatial(x, y)
-
-            let colour = getColour(d, targetDensity)
-
-            ctx.fillStyle = colour
-
-            ctx.fillRect(x, y, cellSize, cellSize)
-        }
-    }
     // Update densities first, using new spatial data
     for (let i = 0; i < balls.length; i++) {
         densities[i] = getDensitySpatial(balls[i].x, balls[i].y);
     }
+
+    // for (let x = 0; x <= innerWidth; x += cellSize) {
+    //     for (let y = 0; y <= innerHeight; y += cellSize) {
+    //         const d = getDensitySpatial(x, y)
+
+    //         let colour = getColour(d, targetDensity)
+
+    //         ctx.fillStyle = colour
+
+    //         ctx.fillRect(x, y, cellSize, cellSize)
+    //     }
+    // }
 
     for (let i = 0; i < balls.length; i++) {
         let ball = balls[i]
         ball.vy += gravity * dt
 
         let force = getForceSpatial(i)
+
+        let mouseForce = interactionForce(i)
 
         let mult = 1 / densities[i]
 
@@ -467,13 +535,11 @@ function update(timestamp) {
 
         //console.log(gradient)
         
-        ball.vx += force.x * dt
-        ball.vy += (force.y) * dt
+        ball.vx += (force.x + mouseForce.x) * dt
+        ball.vy += (force.y + mouseForce.y) * dt
         //else console.log(i)
 
-        //console.log(ball.vx, ball.vy)
-
-       
+        //console.log(ball.vx, ball.vy)     
 
         ball.x += ball.vx * dt
         ball.y += ball.vy * dt
@@ -485,7 +551,7 @@ function update(timestamp) {
 
         collide(ball)
 
-        circle(ball.x, ball.y, ball.r, i == 0 ? 'lime' : 'black')
+        circle(ball.x, ball.y, ball.r, getColour(densities[i], targetDensity))
     }
 
     //console.log(densities[0], targetDensity)
